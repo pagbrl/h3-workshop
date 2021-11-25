@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\Entity\NotionPage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -52,5 +53,38 @@ class NotionService
         ]);
 
         return json_decode($pages->getContent(), true);
+    }
+
+    public function storeNotionPages(): array
+    {
+        $pages = $this->getNotionPages();
+
+        $notionPages = [];
+
+        foreach ($pages['results'] as $page) {
+            $existingNotionPage = $this->entityManager->getRepository(NotionPage::class)->findOneByNotionId($page['id']);
+
+            if (null !== $existingNotionPage) {
+                continue;
+            }
+
+            if (isset($page['properties']['title'])) {
+                $title = substr($page['properties']['title']['title'][0]['plain_text'], 0, 255);
+            } else {
+                $title = 'No Title';
+            }
+            $creationDate = new \DateTime($page['created_time']);
+
+            $notionPage = new NotionPage();
+            $notionPage->setNotionId($page['id']);
+            $notionPage->setTitle($title);
+            $notionPage->setCreationDate($creationDate);
+
+            $notionPages[] = $notionPage;
+            $this->entityManager->persist($notionPage);
+        }
+        $this->entityManager->flush();
+
+        return $notionPages;
     }
 }
